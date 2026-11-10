@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111111">
+  <title>CELLCOM · App interna</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<div class="offline-bar">Sin conexión · lo que cargues queda guardado en este equipo y se envía cuando vuelva internet</div>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="pantallaLogin" style="display:none;">
+  <div class="login-box">
+    <div class="marca">CELLCOM</div>
+    <div class="hint">App interna · Ingresá con tu usuario y PIN</div>
+    <div id="boxUrl" style="display:none;">
+      <label>Link del servidor (Apps Script, termina en /exec)</label>
+      <input id="loginUrl" autocapitalize="none" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <label>Usuario</label>
+    <input id="loginUsuario" autocomplete="username" autocapitalize="none" onkeydown="if(event.key==='Enter')document.getElementById('loginPin').focus()">
+    <label>PIN</label>
+    <input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')entrar()">
+    <div class="actions"><button id="btnEntrar" class="btn btn-primary" style="width:100%" onclick="entrar()">Entrar</button></div>
+    <div id="loginError"></div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="pantallaApp" style="display:none;">
+  <header>
+    <div class="marca">CELLCOM</div>
+    <div class="yo"><span id="yoTexto"></span><button onclick="abrirCambioPin()">Cambiar PIN</button><button onclick="salir()">Salir</button></div>
+  </header>
+  <nav id="menu"></nav>
+  <main>
+
+    <!-- ===================== STOCK ===================== -->
+    <section id="secStock" class="section">
+
+      <!-- Lista + preparar -->
+      <div id="stLista">
+        <div class="panel">
+          <h2>Stocks</h2>
+          <div id="stAvisoOffline" class="hint" style="display:none;"></div>
+          <div class="table-wrap"><table id="stTablaStocks"></table></div>
+          <div class="actions" id="stExportarBox">
+            <button class="btn btn-secondary" onclick="stExportarSeleccionados()">Exportar seleccionados a Excel (Zeppelin)</button>
+            <span class="hint" style="margin:0">Marcá el stock nocturno y el de fundas para bajarlos juntos.</span>
+          </div>
+        </div>
+
+        <div class="panel" id="stPanelPreparar">
+          <h2>Preparar stock nuevo</h2>
+          <div class="grid2">
+            <div><label>Sucursal</label><select id="stSucursal"></select></div>
+            <div><label>Vuelta</label><input id="stVuelta" placeholder="Ej: 4TA" autocapitalize="characters"></div>
+            <div><label>Fecha del stock</label><input id="stFecha" type="date"></div>
+            <div><label>Tipo</label><select id="stTipo" onchange="stRubrosPorDefecto()"><option value="GENERAL">General</option><option value="FUNDAS">Fundas</option></select></div>
+          </div>
+          <label>Sectores (separados por coma)</label>
+          <input id="stSectores">
+          <label>Rubros que se cuentan</label>
+          <div class="hint">Negro = se cuenta. Se proponen según Configuración (el nocturno sin fundas ni los rubros que nunca se cuentan; fundas solo fundas). Se puede cambiar también antes de cerrar.</div>
+          <div class="actions" style="margin-top:4px">
+            <input id="stBuscarRubro" type="search" placeholder="Buscar rubro..." oninput="stPintarRubros()" style="flex:1;min-width:160px">
+            <button type="button" class="btn-mini" onclick="stRubrosTodos(true)">Todos</button>
+            <button type="button" class="btn-mini" onclick="stRubrosTodos(false)">Ninguno</button>
+            <button type="button" class="btn-mini" onclick="stRubrosPorDefecto()">Por defecto</button>
+          </div>
+          <div id="stRubros" class="chips" style="max-height:180px;overflow:auto"></div>
+          <label>Stock de la sucursal (export de Zeppelin, stock mayor a 0)</label>
+          <input type="file" id="stArchivoStock" accept=".xls,.xlsx,.csv,.dbf">
+          <div class="actions">
+            <button id="stBtnCrear" class="btn btn-primary" onclick="stCrear()">Crear stock</button>
+            <button class="btn btn-secondary" onclick="stCrearLocal()">Crear sin conexión (en este equipo)</button>
+          </div>
+          <div class="hint">"Sin conexión" guarda el conteo solo en este equipo. Cuando haya internet lo subís desde "Conteos en este equipo".</div>
+          <div id="stCrearEstado" class="hint"></div>
+        </div>
+
+        <div class="panel" id="stPanelCaja">
+          <div class="head-row">
+            <div><h2>Saldo a favor de caja</h2><div class="hint">Cuando sobra plata en la caja se carga acá. Se descuenta solo del faltante real del próximo stock cerrado de la sucursal.</div></div>
+            <div style="min-width:200px"><select id="cajaSucursal" onchange="cajaCargar()"></select></div>
+          </div>
+          <div class="cards" id="cajaCards"></div>
+          <div id="cajaForm">
+            <div class="grid3">
+              <div><label>Fecha</label><input id="cajaFecha" type="date"></div>
+              <div><label>Importe ($)</label><input id="cajaImporte" type="number" min="0" step="0.01" placeholder="0"></div>
+              <div><label>Tipo</label><select id="cajaTipo"><option value="INGRESO">Sobrante de caja (suma)</option><option value="EGRESO">Corrección (resta)</option></select></div>
+            </div>
+            <label>Detalle</label><input id="cajaDetalle" placeholder="Ej: sobrante del cierre del 31/10">
+            <div class="actions"><button class="btn btn-primary" onclick="cajaAgregar()">Agregar</button></div>
+          </div>
+          <div class="table-wrap"><table id="cajaTabla"></table></div>
+        </div>
+
+        <div class="panel" id="stPanelLocales">
+          <h2>Conteos en este equipo</h2>
+          <div class="hint">Conteos hechos sin conexión y archivos de otros equipos. Al subirlos se suman al stock.</div>
+          <div id="stLocales"></div>
+          <label>Importar archivo de conteo (.json de otro equipo)</label>
+          <input type="file" id="stArchivoOffline" accept=".json" multiple onchange="stLeerArchivosConteo(this)">
+        </div>
+      </div>
+
+      <!-- Conteo -->
+      <div id="stConteo" style="display:none;">
+        <div class="panel">
+          <div class="head-row">
+            <div><h2 id="stConteoTitulo">Conteo</h2><div id="stConteoSub" class="hint"></div></div>
+            <div class="actions">
+              <button class="btn btn-secondary" onclick="stVolver()">Volver</button>
+              <button id="stBtnVerResultado" class="btn btn-secondary" onclick="stVerResultado(ST.stock.id)">Ver resultado</button>
+              <button id="stBtnExportarLocal" class="btn btn-secondary" style="display:none" onclick="stExportarLocal(ST.stock.id)">Exportar archivo</button>
+              <button id="stBtnActSistema" class="btn btn-secondary" onclick="document.getElementById('stArchivoActSistema').click()">Actualizar stock del sistema</button>
+              <input id="stArchivoActSistema" type="file" accept=".xls,.xlsx,.csv,.dbf" style="display:none" onchange="stActualizarSistema(this)">
+            </div>
+          </div>
+          <label>Sector</label>
+          <div id="stSectoresConteo" class="chips"></div>
+          <label>Forma de contar</label>
+          <div class="chips">
+            <button type="button" id="stModoEscanear" class="chip active" onclick="stModo('escanear')">Escanear código</button>
+            <button type="button" id="stModoLista" class="chip" onclick="stModo('lista')">Buscar por nombre (lista)</button>
+          </div>
+        </div>
+
+        <!-- Modo lista: para fundas y artículos sin código -->
+        <div id="stPanelLista" class="panel" style="display:none;">
+          <input id="stListaBuscar" type="search" class="scan" placeholder="Modelo o nombre: A05, IPHONE 13 SILICONA..." oninput="stPintarLista()">
+          <div class="hint" id="stListaInfo"></div>
+          <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input type="checkbox" id="stListaConStock" onchange="stPintarLista()"> Solo los que tienen stock en sistema</label>
+          <div id="stListaItems"></div>
+        </div>
+
+        <div id="stPanelEscanear">
+        <div id="camBox"><video id="camVideo" playsinline muted></video><div class="guia"></div>
+          <div class="camBtns"><button id="btnLinterna" onclick="stLinterna()" style="display:none">🔦</button><button onclick="stDetenerCamara()">Apagar</button></div></div>
+        <div id="camH5"></div>
+
+        <div class="scanbox">
+          <div class="actions" style="margin-top:0;margin-bottom:8px">
+            <button id="stBtnCamara" class="btn btn-primary" style="flex:1" onclick="stIniciarCamara()">📷 Cámara</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('stFotoCodigo').click()">📸 Foto</button>
+            <input id="stFotoCodigo" type="file" accept="image/*" capture="environment" style="display:none" onchange="stLeerFoto(this)">
+          </div>
+          <input id="stScan" class="scan" placeholder="Pistoleá o escribí el código + Enter" autocomplete="off" autocapitalize="characters"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();stProcesar(this.value);this.value='';}">
+          <input id="stBuscarNombre" type="search" placeholder="Buscar por nombre..." style="margin-top:8px" oninput="stBuscarNombre(this.value)">
+          <div id="stResNombre" class="res-list"></div>
+          <div class="estado-sync"><span id="stSync"></span><span id="stSectorActual"></span></div>
+        </div>
+        </div>
+
+        <div id="stLectura"></div>
+
+        <div class="panel">
+          <h3 style="margin-top:0">Últimas lecturas de este equipo</h3>
+          <div id="stHistorial" class="hist"></div>
+        </div>
+      </div>
+
+      <!-- Resultado / revisión / cierre -->
+      <div id="stResultado" style="display:none;">
+        <div class="panel">
+          <div class="head-row">
+            <div><h2 id="stResTitulo">Resultado</h2><div id="stResSub" class="hint"></div></div>
+            <div class="actions" id="stResBotones"></div>
+          </div>
+          <div class="cards" id="stResCards"></div>
+          <div id="stResRubros" class="hint"></div>
+          <div class="actions" id="stResAcciones"></div>
+        </div>
+
+        <div class="panel" id="stZonaRubros" style="display:none;">
+          <h2>Rubros que se cuentan</h2>
+          <div class="hint">Negro = entra en el resultado. Apagá lo que no corresponde (fundas en el nocturno, promociones, reparaciones...) y tocá "Aplicar".</div>
+          <div id="stResRubrosChips" class="chips"></div>
+          <div class="actions"><button class="btn btn-primary" onclick="stAplicarRubros()">Aplicar</button></div>
+        </div>
+
+        <div id="stZonaAbierto">
+          <div class="panel"><h2>Faltantes</h2><div class="hint">Lo más caro arriba. Al buscarlos con los vendedores, cargá cuántos aparecieron y guardá.</div><div class="table-wrap"><table id="stTablaFaltantes" class="rev"></table></div></div>
+          <div class="panel"><h2>Sobrantes</h2><div class="hint">Si algo se contó de más, cargá cuántos y guardá.</div><div class="table-wrap"><table id="stTablaSobrantes" class="rev"></table></div></div>
+          <div class="panel">
+            <h2>Cruce manual</h2>
+            <div class="hint">Para compensar un faltante con un sobrante que la app no cruzó sola.</div>
+            <div class="grid2">
+              <div><label>Faltante</label><select id="stManFalt"></select></div>
+              <div><label>Sobrante</label><select id="stManSobr"></select></div>
+              <div><label>Cantidad</label><input id="stManCant" type="number" min="1" step="1" value="1"></div>
+              <div style="display:flex;align-items:flex-end;padding-bottom:12px"><label style="margin:0;display:flex;gap:8px;align-items:center"><input id="stManRecordar" type="checkbox"> Recordar para próximos stocks</label></div>
+            </div>
+            <div class="actions"><button class="btn btn-secondary" onclick="stAgregarCruce()">Agregar cruce</button></div>
+          </div>
+        </div>
+
+        <div class="panel"><h2>Faltante real (después de cruces)</h2><div class="table-wrap"><table id="stTablaReales"></table></div></div>
+        <div class="panel"><h2>Cruces</h2><div class="table-wrap"><table id="stTablaCruces"></table></div></div>
+
+        <div class="panel" id="stZonaCierre" style="display:none;">
+          <h2>Cerrar stock</h2>
+          <div class="hint">Después de cargar los AFB2/ACB2 en Zeppelin, subí el export de comprobantes para usar esos precios (son los oficiales). Si no lo subís, se cierra con la lista de precios.</div>
+          <label>Export de comprobantes (opcional)</label>
+          <input type="file" id="stArchivoComp" accept=".xls,.xlsx,.csv,.dbf" onchange="stLeerComprobantes()">
+          <div id="stCompFechaBox" style="display:none;"><label>Fecha de los comprobantes</label><select id="stCompFecha" onchange="stResumenComp()"></select></div>
+          <div id="stCompEstado" class="hint"></div>
+          <div class="actions"><button class="btn btn-primary" onclick="stCerrar()">Cerrar stock</button></div>
+        </div>
+
+        <div class="panel" id="stZonaReparto" style="display:none;">
+          <h2>Reparto del faltante</h2>
+          <div class="hint">Se divide en partes iguales el <b>neto a descontar</b> (faltante real menos el saldo a favor de caja aplicado). Los vendedores lo ven en "Mi sucursal".</div>
+          <div id="stEmpleados" class="chips"></div>
+          <div class="actions"><button class="btn btn-primary" onclick="stRepartir()">Guardar reparto</button></div>
+          <div class="table-wrap"><table id="stTablaDescuentos"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== MI SUCURSAL ===================== -->
+    <section id="secMiSucursal" class="section">
+      <div class="panel">
+        <div class="head-row">
+          <div><h2>Mi sucursal</h2><div class="hint">Resultado de cada stock cerrado: qué faltó y cuánto se descuenta.</div></div>
+          <div id="miSucSelectorBox" style="display:none;min-width:200px"><select id="miSucSelector" onchange="cargarMiSucursal()"></select></div>
+        </div>
+        <div id="miSucLista"></div>
+      </div>
+      <div class="panel" id="miSucDetalle" style="display:none;"></div>
+    </section>
+
+    <!-- ===================== CONFIGURACIÓN ===================== -->
+    <section id="secConfig" class="section">
+      <div class="panel">
+        <h2>General</h2>
+        <div class="grid3">
+          <div><label>Cotización USD</label><input id="cfgCotizacion" type="number" step="0.01" min="0"></div>
+          <div><label>Sectores por defecto</label><input id="cfgSectores" placeholder="A,B,C,D,E"></div>
+          <div><label>Días para reclamar</label><input id="cfgDias" type="number" min="0" step="1"></div>
+        </div>
+        <div class="actions"><button class="btn btn-primary" onclick="guardarConfigGeneral()">Guardar</button></div>
+        <div id="cfgLinks" class="hint"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Bases de Zeppelin</h2>
+        <div class="hint">Artículos = COMPLETO.XLS · Marcas, rubros y subrubros · Lista de precios = VALORIZADO LISTA 8 (USD). Los .XLS de Zeppelin se suben tal cual.</div>
+        <div class="grid2">
+          <div><label>Tipo de base</label>
+            <select id="cfgTipoBase">
+              <option value="articulos">Artículos (COMPLETO)</option>
+              <option value="marcas">Marcas</option>
+              <option value="rubros">Rubros</option>
+              <option value="subrubros">Subrubros</option>
+              <option value="precios">Lista de precios (USD)</option>
+            </select></div>
+          <div><label>Archivo</label><input type="file" id="cfgArchivoBase" accept=".xls,.xlsx,.csv,.dbf"></div>
+        </div>
+        <div class="actions"><button class="btn btn-primary" onclick="importarBaseUI()">Importar</button></div>
+        <div id="cfgBaseEstado" class="hint"></div>
+        <div class="table-wrap"><table id="cfgTablaBases"></table></div>
+      </div>
+
+      <div class="panel">
+        <h2>Rubros</h2>
+        <div class="hint">Sirve para proponer qué se cuenta en cada stock. Después se puede cambiar en cada uno.</div>
+        <label>Nunca se cuentan (promociones, reparaciones...)</label>
+        <div id="cfgRubrosNunca" class="chips" style="max-height:180px;overflow:auto"></div>
+        <label>Son de fundas (se cuentan en el stock de fundas, no en el nocturno)</label>
+        <div id="cfgRubrosFundas" class="chips" style="max-height:180px;overflow:auto"></div>
+        <div class="actions"><button class="btn btn-primary" onclick="guardarRubrosCfg()">Guardar rubros</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>Sucursales</h2>
+        <div class="table-wrap"><table id="cfgTablaSucursales"></table></div>
+        <div class="actions"><button class="btn btn-secondary" onclick="agregarFilaSucursal()">Agregar sucursal</button><button class="btn btn-primary" onclick="guardarSucursalesUI()">Guardar sucursales</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>Usuarios</h2>
+        <div class="hint">Encargados y vendedores ven solo su sucursal. Los usuarios de cada sucursal son los que entran en el reparto del faltante.</div>
+        <div class="table-wrap"><table id="cfgTablaUsuarios"></table></div>
+        <h3 id="usrFormTitulo">Nuevo usuario</h3>
+        <input type="hidden" id="usrId">
+        <div class="grid3">
+          <div><label>Usuario (para entrar)</label><input id="usrUsuario" autocapitalize="none"></div>
+          <div><label>Nombre y apellido</label><input id="usrNombre"></div>
+          <div><label>Rol</label><select id="usrRol"><option value="vendedor">Vendedor</option><option value="encargado">Encargado</option><option value="admin">Admin</option></select></div>
+          <div><label>Sucursal</label><select id="usrSucursal"></select></div>
+          <div><label>PIN (4 a 8 números)</label><input id="usrPin" inputmode="numeric" placeholder="Dejar vacío para no cambiarlo"></div>
+          <div><label>Activo</label><select id="usrActivo"><option value="SI">Sí</option><option value="NO">No</option></select></div>
+        </div>
+        <div class="actions"><button class="btn btn-primary" onclick="guardarUsuarioUI()">Guardar usuario</button><button class="btn btn-secondary" onclick="limpiarFormUsuario()">Limpiar</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>Este equipo</h2>
+        <div class="hint" id="cfgEquipo"></div>
+        <div class="actions"><button class="btn btn-secondary" onclick="cambiarServidor()">Cambiar link del servidor</button><button class="btn btn-secondary" onclick="borrarCacheArticulos()">Volver a bajar artículos</button></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="config.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
+<script src="js/app.js"></script>
+<script src="js/stock.js"></script>
+</body>
+</html>
