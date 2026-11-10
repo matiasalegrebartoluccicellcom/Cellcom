@@ -79,15 +79,15 @@ function stAbrir(){
     sel.innerHTML=(d.sucursales.length>1?'<option value="">Seleccionar sucursal</option>':'')+d.sucursales.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
     lsSet('st_sucursales',d.sucursales);
     const sec=document.getElementById('stSectores'); if(!sec.value) sec.value=d.sectoresDefault;
-    ST.rubros=d.rubros; ST.rubrosNunca=d.rubrosNunca||[]; ST.rubrosFundas=d.rubrosFundas||[];
-    lsSet('st_rubros',{rubros:d.rubros,nunca:ST.rubrosNunca,fundas:ST.rubrosFundas});
+    ST.rubros=d.rubros; ST.rubrosNunca=d.rubrosNunca||[]; ST.rubrosFundas=d.rubrosFundas||[]; ST.rubrosMuertos=d.rubrosMuertos||[];
+    lsSet('st_rubros',{rubros:d.rubros,nunca:ST.rubrosNunca,fundas:ST.rubrosFundas,muertos:ST.rubrosMuertos});
     stRubrosPorDefecto();
   }).catch(e=>{
     // Sin conexión: se usa lo último guardado.
     const sucs=lsGet('st_sucursales')||(YO.sucursal?[YO.sucursal]:[]);
     document.getElementById('stSucursal').innerHTML=sucs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
     const sec=document.getElementById('stSectores'); if(!sec.value) sec.value='A,B,C,D,E';
-    const rg=lsGet('st_rubros')||{}; ST.rubros=Array.isArray(rg)?rg:(rg.rubros||[]); ST.rubrosNunca=rg.nunca||[]; ST.rubrosFundas=rg.fundas||[];
+    const rg=lsGet('st_rubros')||{}; ST.rubros=Array.isArray(rg)?rg:(rg.rubros||[]); ST.rubrosNunca=rg.nunca||[]; ST.rubrosFundas=rg.fundas||[]; ST.rubrosMuertos=rg.muertos||[];
     stRubrosPorDefecto();
     if(!esSinConexion(e)) errorUI(e);
   });
@@ -125,8 +125,8 @@ function stToggleRubro(c){ c=decodeURIComponent(c); ST.rubrosSel.has(c)?ST.rubro
 // ST.rubrosSel = rubros que SE CUENTAN (chip negro).
 function stRubrosPorDefecto(){
   const tipo=document.getElementById('stTipo').value;
-  const nunca=new Set(ST.rubrosNunca||[]), fundas=new Set(ST.rubrosFundas||[]);
-  ST.rubrosSel=new Set((ST.rubros||[]).map(r=>r.codigo).filter(c=>tipo==='FUNDAS'?fundas.has(c):!nunca.has(c)&&!fundas.has(c)));
+  const nunca=new Set(ST.rubrosNunca||[]), fundas=new Set(ST.rubrosFundas||[]), muertos=new Set(ST.rubrosMuertos||[]);
+  ST.rubrosSel=new Set((ST.rubros||[]).map(r=>r.codigo).filter(c=>tipo==='FUNDAS'?fundas.has(c):!nunca.has(c)&&!fundas.has(c)&&!muertos.has(c)));
   stPintarRubros();
 }
 function stRubrosTodos(si){ ST.rubrosSel=new Set(si?(ST.rubros||[]).map(r=>r.codigo):[]); stPintarRubros(); }
@@ -608,6 +608,7 @@ function stBorrarLocal(id,sinPreguntar){
 
 // ---------- resultado ----------
 function stVerResultado(id){
+  if(!ST.res||ST.res.stock.id!==id) ST.filtroRev={q:'',rubro:'',sub:''};
   stMostrar('stResultado');
   document.getElementById('stResTitulo').textContent='Calculando...';
   const correr=()=>api('getResultadoStock',id).then(stPintarResultado).catch(e=>{ errorUI(e); if(esSinConexion(e)) stVolver(); });
@@ -647,18 +648,10 @@ function stPintarResultado(r){
     if(YO.rol==='admin') acc.push(`<button class="btn btn-danger" onclick="stEstado('ANULADO')">Anular stock</button>`);
     document.getElementById('stResAcciones').innerHTML=acc.join('');
 
-    const fila=(f,tipo)=>{
-      const val=tipo==='F'?Math.max(0,f.ajuste):Math.max(0,-f.ajuste);
-      return [f.codigo,f.nombre,f.rubro,num(f.sistema),num(f.contado),html(`<b>${num(Math.abs(f.diferenciaConteo))}</b>`),
-        f.sinPrecio?html('<span class="warn">Sin precio</span>'):money(f.precioARS),money(Math.abs(f.diferenciaConteo)*f.precioARS),
-        html(`<input type="number" min="0" step="1" value="${val||''}" placeholder="0" data-cod="${esc(f.codigo)}"> <input class="nota" value="${esc(f.nota||'')}" placeholder="Nota"> <button class="btn-mini" onclick="stGuardarRev(this,'${tipo}')">Guardar</button>`),
-        html(`<b>${num(Math.abs(f.diferencia))}</b>`)];
-    };
-    renderTable('stTablaFaltantes',['Código','Artículo','Rubro','Sistema','Contado','Falta','Precio','Total','Apareció / nota','Falta final'],r.faltantes.map(f=>fila(f,'F')),'No hay faltantes.');
-    renderTable('stTablaSobrantes',['Código','Artículo','Rubro','Sistema','Contado','Sobra','Precio','Total','De más / nota','Sobra final'],r.sobrantes.map(f=>fila(f,'S')),'No hay sobrantes.');
-    const opt=l=>l.map(x=>`<option value="${esc(x.codigo)}">${esc(x.nombre)} · ${esc(x.rubro)} (disp. ${num(x.cantidad)})</option>`).join('');
-    document.getElementById('stManFalt').innerHTML=opt(r.faltantesDisponibles)||'<option value="">Sin faltantes</option>';
-    document.getElementById('stManSobr').innerHTML=opt(r.sobrantesDisponibles)||'<option value="">Sin sobrantes</option>';
+    ST.resFaltantes=r.faltantes; ST.resSobrantes=r.sobrantes;
+    stFiltrarRev();
+    ST.man={Falt:r.faltantesDisponibles||[],Sobr:r.sobrantesDisponibles||[]};
+    stPintarMan('Falt',true); stPintarMan('Sobr',true);
   } else {
     renderCards('stResCards',[['Faltante real',money(s.faltanteRealARS)],['Saldo de caja aplicado',money(s.saldoCajaAplicado)],
       ['Neto a descontar',money(s.netoARS)],['Neto a descontar USD',usd(s.netoUSD)],['Sobrante real',money(s.sobranteRealARS)],
@@ -673,12 +666,82 @@ function stPintarResultado(r){
   }
   renderTable('stTablaReales',['Código','Artículo','Rubro','Cant. real','Precio','Total $','Total USD'],
     r.faltantesReales.map(f=>[f.codigo,f.nombre,f.rubro,num(f.cantidadReal),money(f.precioARS),money(f.totalARS),usd(f.totalUSD)]),'No queda faltante real.');
+  stPintarFuera('stZonaMuerto','stMuertoInfo','stTablaMuerto',r.stockMuerto,r);
+  stPintarFuera('stZonaNoCuenta','stNoCuentaInfo','stTablaNoCuenta',r.noCuenta,r);
   renderTable('stTablaCruces',['Faltante','Sobrante','Cant.','Motivo',''],(r.cruces||[]).map(c=>[c.faltante,c.sobrante,num(c.cantidad),c.motivo,
     c.manualId&&abierto?html(`<button class="btn-mini" onclick="stQuitarCruce('${esc(c.manualId)}')">Quitar</button>`):'']),'Sin cruces.');
 }
+// Filtro de la lista de revisión (rubro / subrubro / texto). Solo afecta la vista.
+function stFilaRev(f,tipo){
+  const val=tipo==='F'?Math.max(0,f.ajuste):Math.max(0,-f.ajuste);
+  return [f.codigo,f.nombre,f.rubro,f.subrubro||'',num(f.sistema),num(f.contado),html(`<b>${num(Math.abs(f.diferenciaConteo))}</b>`),
+    f.sinPrecio?html('<span class="warn">Sin precio</span>'):money(f.precioARS),money(Math.abs(f.diferenciaConteo)*f.precioARS),
+    html(`<input type="number" min="0" step="1" value="${val||''}" placeholder="0" data-cod="${esc(f.codigo)}"> <input class="nota" value="${esc(f.nota||'')}" placeholder="Nota"> <button class="btn-mini" onclick="stGuardarRev(this,'${tipo}')">Guardar</button>`),
+    html(`<b>${num(Math.abs(f.diferencia))}</b>`)];
+}
+function stFiltrarRev(){
+  if(!ST.filtroRev) ST.filtroRev={q:'',rubro:'',sub:''};
+  const F=ST.filtroRev, todos=[...(ST.resFaltantes||[]),...(ST.resSobrantes||[])];
+  const q=document.getElementById('stFiltQ'), sr=document.getElementById('stFiltRubro'), ss=document.getElementById('stFiltSub');
+  if(q.value!==F.q) q.value=F.q;
+  const uniq=a=>[...new Set(a.filter(Boolean))].sort((x,y)=>String(x).localeCompare(String(y),'es'));
+  const rubros=uniq(todos.map(f=>f.rubro));
+  if(F.rubro&&!rubros.includes(F.rubro)) F.rubro='';
+  const subs=uniq(todos.filter(f=>!F.rubro||f.rubro===F.rubro).map(f=>f.subrubro));
+  if(F.sub&&!subs.includes(F.sub)) F.sub='';
+  sr.innerHTML='<option value="">Todos los rubros</option>'+rubros.map(x=>`<option${x===F.rubro?' selected':''}>${esc(x)}</option>`).join('');
+  ss.innerHTML='<option value="">Todos los subrubros</option>'+subs.map(x=>`<option${x===F.sub?' selected':''}>${esc(x)}</option>`).join('');
+  const t=F.q.trim().toUpperCase();
+  const pasa=f=>(!F.rubro||f.rubro===F.rubro)&&(!F.sub||f.subrubro===F.sub)&&(!t||String(f.codigo).toUpperCase().includes(t)||String(f.nombre).toUpperCase().includes(t));
+  const fa=(ST.resFaltantes||[]).filter(pasa), so=(ST.resSobrantes||[]).filter(pasa);
+  const tot=l=>l.reduce((s,f)=>s+Math.abs(f.diferencia)*f.precioARS,0);
+  const filtrando=F.q||F.rubro||F.sub;
+  // Con un rubro o subrubro elegido, el admin lo puede sacar del conteo desde acá.
+  const bm=document.getElementById('stFiltAcciones');
+  let g=null;
+  if(F.sub){ const f=todos.find(x=>x.subrubro===F.sub&&x.subrubroCod); if(f) g={nivel:'SUBRUBRO',codigo:f.subrubroCod,nombre:F.sub}; }
+  else if(F.rubro){ const rp=(ST.rubrosPresentes||[]).find(x=>x.nombre===F.rubro&&x.codigo); const f=todos.find(x=>x.rubro===F.rubro&&x.rubroCod);
+    const c=rp?rp.codigo:(f?f.rubroCod:''); if(c) g={nivel:'RUBRO',codigo:c,nombre:F.rubro}; }
+  const puede=g&&YO.rol==='admin';
+  bm.style.display=puede?'flex':'none';
+  bm.innerHTML=puede?(()=>{ const a=`'${g.nivel}','${encodeURIComponent(g.codigo)}','${encodeURIComponent(g.nombre)}'`, que=(g.nivel==='RUBRO'?'rubro ':'subrubro ')+esc(g.nombre);
+    return `<button type="button" class="btn btn-secondary" onclick="stMarcarGrupo(${a},'NUNCA')">No contar ${que}</button>
+      <button type="button" class="btn btn-danger" onclick="stMarcarGrupo(${a},'MUERTO')">Mandar ${que} a stock muerto</button>
+      <span class="hint">Deja de contarse en este stock y en los próximos.</span>`; })():'';
+  document.getElementById('stFiltInfo').innerHTML=filtrando?`Mostrando ${fa.length} de ${(ST.resFaltantes||[]).length} faltantes (${money(tot(fa))} final) y ${so.length} de ${(ST.resSobrantes||[]).length} sobrantes (${money(tot(so))} final)`:'';
+  const cab=x=>['Código','Artículo','Rubro','Subrubro','Sistema','Contado',x,'Precio','Total',x==='Falta'?'Apareció / nota':'De más / nota',x+' final'];
+  renderTable('stTablaFaltantes',cab('Falta'),fa.map(f=>stFilaRev(f,'F')),filtrando?'Nada con ese filtro.':'No hay faltantes.');
+  renderTable('stTablaSobrantes',cab('Sobra'),so.map(f=>stFilaRev(f,'S')),filtrando?'Nada con ese filtro.':'No hay sobrantes.');
+}
+function stMarcarGrupo(nivel,cod,nombre,destino){
+  cod=decodeURIComponent(cod); nombre=decodeURIComponent(nombre);
+  const que=(nivel==='RUBRO'?'el rubro ':'el subrubro ')+nombre;
+  const msg={NUNCA:`¿No contar ${que}? Pasa a "No se cuenta" (en este stock y en los próximos).`,
+    MUERTO:`¿Mandar ${que} a stock muerto? No se cuenta ni se descuenta (en este stock y en los próximos).`,
+    CONTAR:`¿Volver a contar ${que}?`}[destino];
+  if(!confirm(msg)) return;
+  api('marcarGrupo',ST.res.stock.id,nivel,cod,destino).then(r=>{
+    if(nivel==='RUBRO'){ const m=new Set(ST.rubrosMuertos||[]), n=new Set(ST.rubrosNunca||[]); m.delete(cod); n.delete(cod);
+      if(destino==='MUERTO') m.add(cod); if(destino==='NUNCA') n.add(cod); ST.rubrosMuertos=[...m]; ST.rubrosNunca=[...n]; }
+    if(destino!=='CONTAR') ST.filtroRev={q:'',rubro:'',sub:''};
+    toast({NUNCA:nombre+' no se cuenta',MUERTO:nombre+' pasó a stock muerto',CONTAR:nombre+' vuelve a contarse'}[destino]); stPintarResultado(r);
+  }).catch(errorUI);
+}
+function stPintarFuera(zona,info,tabla,m,r){
+  m=m||{items:[],grupos:[],resumen:{}};
+  document.getElementById(zona).style.display=m.items.length?'block':'none';
+  if(!m.items.length) return;
+  const z=m.resumen, puede=!r.cerrado&&YO.rol==='admin';
+  document.getElementById(info).innerHTML=`${num(z.articulos)} artículos · ${num(z.unidades)} unidades · <b>${money(z.totalARS)}</b> (${usd(z.totalUSD)}) a lista 8${z.sinPrecio?' · '+z.sinPrecio+' sin precio':''}`
+    +`<div class="chips" style="margin-top:6px">${(m.grupos||[]).map(g=>`<span class="chip">${g.nivel==='RUBRO'?'Rubro':'Subrubro'} ${esc(g.nombre)}<small>${num(g.unidades)} u. · ${money(g.totalARS)}</small>${puede?` <button type="button" class="btn-mini" onclick="stMarcarGrupo('${g.nivel}','${encodeURIComponent(g.codigo)}','${encodeURIComponent(g.nombre)}','CONTAR')">Volver a contar</button>`:''}</span>`).join('')}</div>`;
+  renderTable(tabla,['Código','Artículo','Rubro','Subrubro','Por','Stock sistema','Precio','Total $','Total USD'],
+    m.items.map(i=>[i.codigo,i.nombre,i.rubro,i.subrubro||'',i.grupo,num(i.stock),i.precioARS?money(i.precioARS):html('<span class="warn">Sin precio</span>'),money(i.totalARS),usd(i.totalUSD)]),'');
+}
+function stFiltroSet(k,v){ if(!ST.filtroRev) ST.filtroRev={q:'',rubro:'',sub:''}; ST.filtroRev[k]=v; if(k==='rubro') ST.filtroRev.sub=''; stFiltrarRev(); }
+function stLimpiarFiltroRev(){ ST.filtroRev={q:'',rubro:'',sub:''}; document.getElementById('stFiltQ').value=''; stFiltrarRev(); }
 function stPintarRubrosRes(){
   document.getElementById('stResRubrosChips').innerHTML=(ST.rubrosPresentes||[]).filter(x=>x.codigo).map(x=>
-    `<button type="button" class="chip${ST.rubrosRes.has(x.codigo)?' active':''}" onclick="stToggleRubroRes('${encodeURIComponent(x.codigo)}')">${esc(x.nombre)}<small>${num(x.articulos)} art. · ${num(x.unidadesSistema)} u.</small></button>`).join('')
+    `<button type="button" class="chip${ST.rubrosRes.has(x.codigo)?' active':''}" onclick="stToggleRubroRes('${encodeURIComponent(x.codigo)}')">${esc(x.nombre)}${x.muerto?' <small>(stock muerto)</small>':''}<small>${num(x.articulos)} art. · ${num(x.unidadesSistema)} u.</small></button>`).join('')
     ||'<span class="hint">No hay rubros en este stock.</span>';
 }
 function stToggleRubroRes(c){ c=decodeURIComponent(c); ST.rubrosRes.has(c)?ST.rubrosRes.delete(c):ST.rubrosRes.add(c); stPintarRubrosRes(); }
@@ -692,6 +755,18 @@ function stGuardarRev(btn,tipo){
   const n=Math.max(0,Number(ins[0].value)||0);
   btn.textContent='...';
   api('guardarRevision',ST.res.stock.id,ins[0].dataset.cod,tipo==='F'?n:-n,ins[1].value).then(stPintarResultado).catch(e=>{ btn.textContent='Guardar'; errorUI(e); });
+}
+// Cruce manual: buscador por código/nombre y filtro por rubro para cada lista.
+function stPintarMan(k,reset){
+  const lista=(ST.man&&ST.man[k])||[], q=document.getElementById('stMan'+k+'Q'), rs=document.getElementById('stMan'+k+'R'), sel=document.getElementById('stMan'+k);
+  const elegido=sel.value;
+  if(reset){ const ant=rs.value; const rubros=[...new Set(lista.map(x=>x.rubro).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+    rs.innerHTML='<option value="">Todos los rubros</option>'+rubros.map(x=>`<option${x===ant?' selected':''}>${esc(x)}</option>`).join(''); }
+  const t=q.value.trim().toUpperCase(), rb=rs.value;
+  const vis=lista.filter(x=>(!rb||x.rubro===rb)&&(!t||String(x.codigo).toUpperCase().includes(t)||String(x.nombre).toUpperCase().includes(t)));
+  sel.innerHTML=vis.map(x=>`<option value="${esc(x.codigo)}"${x.codigo===elegido?' selected':''}>${esc(x.nombre)} · ${esc(x.codigo)} · ${esc(x.rubro)} (disp. ${num(x.cantidad)})</option>`).join('')
+    ||`<option value="">${lista.length?'Nada con ese filtro':(k==='Falt'?'Sin faltantes':'Sin sobrantes')}</option>`;
+  if(!sel.value&&vis.length) sel.selectedIndex=0;
 }
 function stAgregarCruce(){
   const f=document.getElementById('stManFalt').value, s=document.getElementById('stManSobr').value;
@@ -744,6 +819,8 @@ async function stExportar(ids){
     res.push({SUCURSAL:'TOTAL',FALTANTE_REAL_ARS:sum('FALTANTE_REAL_ARS'),FALTANTE_REAL_USD:sum('FALTANTE_REAL_USD'),SALDO_CAJA_APLICADO:sum('SALDO_CAJA_APLICADO'),
       NETO_A_DESCONTAR_ARS:sum('NETO_A_DESCONTAR_ARS'),NETO_A_DESCONTAR_USD:sum('NETO_A_DESCONTAR_USD'),
       SOBRANTE_REAL_ARS:res.reduce((t,x)=>t+Number(x.SOBRANTE_REAL_ARS||0),0),SOBRANTE_REAL_USD:+res.reduce((t,x)=>t+Number(x.SOBRANTE_REAL_USD||0),0).toFixed(2)});
+    const fuera=k=>{ const o=[]; d.stocks.forEach(x=>(x[k]||[]).forEach(i=>o.push({STOCK:etiqueta(x.stock),CODIGO:i.codigo,NOMBRE:i.nombre,RUBRO:i.rubro,SUBRUBRO:i.subrubro||'',POR:i.grupo||'',STOCK_SISTEMA:i.stock,PRECIO_USD:i.precioUSD,PRECIO_ARS:i.precioARS,TOTAL_ARS:i.totalARS,TOTAL_USD:i.totalUSD}))); return o; };
+    const muerto=fuera('muerto'), noCuenta=fuera('noCuenta');
     const wsR=XLSX.utils.json_to_sheet(res);
     const desc=[]; d.stocks.forEach(x=>x.descuentos.forEach(z=>desc.push({STOCK:etiqueta(x.stock),EMPLEADO:z.nombre,DESCUENTO_ARS:z.montoARS,DESCUENTO_USD:z.montoUSD,ESTADO:z.estado})));
     if(desc.length){
@@ -754,6 +831,8 @@ async function stExportar(ids){
     }
     wsR['!cols']=[{wch:24},{wch:18},{wch:16},{wch:14},{wch:12},{wch:18},{wch:18},{wch:18},{wch:20},{wch:20},{wch:18},{wch:18}];
     XLSX.utils.book_append_sheet(wb,wsR,'RESUMEN');
+    if(muerto.length) XLSX.utils.book_append_sheet(wb,hoja(muerto,[24,18,42,22,22,26,12,10,12,14,12]),'STOCK MUERTO');
+    if(noCuenta.length) XLSX.utils.book_append_sheet(wb,hoja(noCuenta,[24,18,42,22,22,26,12,10,12,14,12]),'NO SE CUENTA');
     const s0=d.stocks[0].stock;
     const nombre=`Zeppelin_${s0.sucursal}_${s0.vuelta}_${[...new Set(d.stocks.map(x=>x.stock.tipo))].join('+')}.xlsx`.replace(/[^\w.+\-]/g,'_');
     XLSX.writeFile(wb,nombre);

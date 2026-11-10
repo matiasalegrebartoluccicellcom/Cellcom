@@ -16,7 +16,7 @@
 <!-- ===================== LOGIN ===================== -->
 <div id="pantallaLogin" style="display:none;">
   <div class="login-box">
-    <div class="marca">CELLCOM</div>
+    <div class="marca"><img src="img/logo-negro.png" alt="CELLCOM"></div>
     <div class="hint">App interna · Ingresá con tu usuario y PIN</div>
     <div id="boxUrl" style="display:none;">
       <label>Link del servidor (Apps Script, termina en /exec)</label>
@@ -34,7 +34,7 @@
 <!-- ===================== APP ===================== -->
 <div id="pantallaApp" style="display:none;">
   <header>
-    <div class="marca">CELLCOM</div>
+    <div class="marca"><img src="img/logo-blanco.png" alt="CELLCOM"></div>
     <div class="yo"><span id="yoTexto"></span><button onclick="abrirCambioPin()">Cambiar PIN</button><button onclick="salir()">Salir</button></div>
   </header>
   <nav id="menu"></nav>
@@ -188,14 +188,28 @@
         </div>
 
         <div id="stZonaAbierto">
+          <div class="panel"><h2>Filtrar lista</h2><div class="hint">Solo cambia lo que ves para revisar; no cambia qué se cuenta (eso es "Rubros que se cuentan").</div>
+            <div class="row">
+              <input id="stFiltQ" placeholder="Buscar código o nombre" oninput="stFiltroSet('q',this.value)">
+              <select id="stFiltRubro" onchange="stFiltroSet('rubro',this.value)"></select>
+              <select id="stFiltSub" onchange="stFiltroSet('sub',this.value)"></select>
+              <button type="button" class="btn btn-secondary" onclick="stLimpiarFiltroRev()">Limpiar</button>
+            </div>
+            <div id="stFiltInfo" class="hint"></div>
+            <div id="stFiltAcciones" class="actions" style="display:none;"></div>
+          </div>
           <div class="panel"><h2>Faltantes</h2><div class="hint">Lo más caro arriba. Al buscarlos con los vendedores, cargá cuántos aparecieron y guardá.</div><div class="table-wrap"><table id="stTablaFaltantes" class="rev"></table></div></div>
           <div class="panel"><h2>Sobrantes</h2><div class="hint">Si algo se contó de más, cargá cuántos y guardá.</div><div class="table-wrap"><table id="stTablaSobrantes" class="rev"></table></div></div>
           <div class="panel">
             <h2>Cruce manual</h2>
             <div class="hint">Para compensar un faltante con un sobrante que la app no cruzó sola.</div>
             <div class="grid2">
-              <div><label>Faltante</label><select id="stManFalt"></select></div>
-              <div><label>Sobrante</label><select id="stManSobr"></select></div>
+              <div><label>Faltante</label>
+                <div class="row"><input id="stManFaltQ" type="search" placeholder="Buscar faltante..." oninput="stPintarMan('Falt')"><select id="stManFaltR" onchange="stPintarMan('Falt')"></select></div>
+                <select id="stManFalt" size="6" style="height:auto;margin-top:6px"></select></div>
+              <div><label>Sobrante</label>
+                <div class="row"><input id="stManSobrQ" type="search" placeholder="Buscar sobrante..." oninput="stPintarMan('Sobr')"><select id="stManSobrR" onchange="stPintarMan('Sobr')"></select></div>
+                <select id="stManSobr" size="6" style="height:auto;margin-top:6px"></select></div>
               <div><label>Cantidad</label><input id="stManCant" type="number" min="1" step="1" value="1"></div>
               <div style="display:flex;align-items:flex-end;padding-bottom:12px"><label style="margin:0;display:flex;gap:8px;align-items:center"><input id="stManRecordar" type="checkbox"> Recordar para próximos stocks</label></div>
             </div>
@@ -205,6 +219,14 @@
 
         <div class="panel"><h2>Faltante real (después de cruces)</h2><div class="table-wrap"><table id="stTablaReales"></table></div></div>
         <div class="panel"><h2>Cruces</h2><div class="table-wrap"><table id="stTablaCruces"></table></div></div>
+        <div class="panel" id="stZonaMuerto" style="display:none;"><h2>Stock muerto en sistema</h2>
+          <div class="hint">Figura en sistema pero no está. No se cuenta ni se descuenta. Sale en el Excel, hoja STOCK MUERTO, para decidir qué hacer.</div>
+          <div id="stMuertoInfo" class="hint"></div>
+          <div class="table-wrap"><table id="stTablaMuerto"></table></div></div>
+        <div class="panel" id="stZonaNoCuenta" style="display:none;"><h2>No se cuenta</h2>
+          <div class="hint">Rubros o subrubros que no se cuentan (ej. stickers cargados con rubro bazar). Lo que el sistema tiene de eso en la sucursal. Sale en el Excel, hoja NO SE CUENTA.</div>
+          <div id="stNoCuentaInfo" class="hint"></div>
+          <div class="table-wrap"><table id="stTablaNoCuenta"></table></div></div>
 
         <div class="panel" id="stZonaCierre" style="display:none;">
           <h2>Cerrar stock</h2>
@@ -277,6 +299,15 @@
         <div id="cfgRubrosNunca" class="chips" style="max-height:180px;overflow:auto"></div>
         <label>Son de fundas (se cuentan en el stock de fundas, no en el nocturno)</label>
         <div id="cfgRubrosFundas" class="chips" style="max-height:180px;overflow:auto"></div>
+        <label>Stock muerto (figura en sistema pero no está: no se cuenta ni se descuenta, sale en un listado aparte para decidir qué hacer)</label>
+        <div id="cfgRubrosMuertos" class="chips" style="max-height:180px;overflow:auto"></div>
+        <h3 style="margin-top:14px">Por subrubro</h3>
+        <div class="hint">Para cuando el rubro se cuenta pero un subrubro no (ej. STICKERS cargado con rubro BAZAR). El subrubro manda sobre el rubro.</div>
+        <input id="cfgBuscarSub" type="search" placeholder="Buscar subrubro..." oninput="pintarRubrosCfg()">
+        <label>Subrubros que no se cuentan</label>
+        <div id="cfgSubNunca" class="chips" style="max-height:160px;overflow:auto"></div>
+        <label>Subrubros de stock muerto</label>
+        <div id="cfgSubMuertos" class="chips" style="max-height:160px;overflow:auto"></div>
         <div class="actions"><button class="btn btn-primary" onclick="guardarRubrosCfg()">Guardar rubros</button></div>
       </div>
 

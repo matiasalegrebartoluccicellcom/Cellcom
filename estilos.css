@@ -2,7 +2,8 @@
 html,body{max-width:100%;overflow-x:hidden}
 body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f4f4f5;color:#111}
 header{background:#111;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-header .marca{font-size:19px;font-weight:800;letter-spacing:.5px}
+header .marca{font-size:19px;font-weight:800;letter-spacing:.5px;line-height:0}
+header .marca img{height:26px;width:auto;display:block}
 header .yo{font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 header .yo button{background:#333;color:#fff;border:0;border-radius:10px;padding:7px 11px;cursor:pointer;font-weight:700}
 nav{display:flex;gap:8px;padding:10px 12px;background:#fff;border-bottom:1px solid #ddd;position:sticky;top:0;z-index:10;flex-wrap:wrap}
@@ -44,7 +45,8 @@ th{background:#111;color:#fff;position:sticky;top:0;z-index:1}
 /* Login */
 #pantallaLogin{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-box{width:min(380px,100%);background:#fff;border-radius:22px;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.15)}
-.login-box .marca{font-size:24px;font-weight:800;margin-bottom:4px}
+.login-box .marca{font-size:24px;font-weight:800;margin-bottom:10px;line-height:0}
+.login-box .marca img{width:100%;max-width:260px;height:auto;display:block;margin:0 auto 6px}
 .login-box input{height:52px;font-size:18px}
 #loginError{color:#b91c1c;font-weight:700;min-height:20px;margin-top:10px}
 
@@ -118,3 +120,4 @@ body.sin-conexion .offline-bar{display:block}
 .item-lista .ctrl button{width:44px;height:44px;border-radius:12px;border:1px solid #ccc;background:#fff;font-size:20px;font-weight:800}
 .item-lista .ctrl input{width:62px;height:44px;text-align:center;font-weight:800;padding:0 4px}
 .item-lista.dif-neg .cont{color:#b91c1c}.item-lista.dif-pos .cont{color:#a16207}.item-lista.dif-ok .cont{color:#15803d}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>input,.row>select{flex:1 1 160px}.row>button{flex:0 0 auto}

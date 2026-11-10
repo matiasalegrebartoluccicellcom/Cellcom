@@ -170,7 +170,8 @@ function cargarConfig(){
     renderTable('cfgTablaBases',['Base','Registros','Actualizada'],c.bases.map(b=>[b.nombre,num(b.registros),b.fecha||'']));
     renderSucursalesCfg();
     renderUsuariosCfg();
-    RUB_CFG={nunca:new Set(c.rubrosNunca||[]),fundas:new Set(c.rubrosFundas||[])};
+    RUB_CFG={nunca:new Set(c.rubrosNunca||[]),fundas:new Set(c.rubrosFundas||[]),muertos:new Set(c.rubrosMuertos||[])};
+    SUB_CFG={nunca:new Set(c.subrubrosNunca||[]),muertos:new Set(c.subrubrosMuertos||[])};
     pintarRubrosCfg();
     const prods=lsGet('cellcom_productos2');
     document.getElementById('cfgEquipo').textContent=`Servidor: ${API_URL||'(sin configurar)'} · Artículos guardados en este equipo: ${prods?prods.tsv.split('\n').length:0} · Versión pantallas: ${typeof CELLCOM_VERSION!=='undefined'?CELLCOM_VERSION:'-'}`;
@@ -208,15 +209,29 @@ async function importarBaseUI(){
   }catch(e){ st.textContent=e.message; }
 }
 
-let RUB_CFG={nunca:new Set(),fundas:new Set()};
+let RUB_CFG={nunca:new Set(),fundas:new Set(),muertos:new Set()}, SUB_CFG={nunca:new Set(),muertos:new Set()};
 function pintarRubrosCfg(){
   const chips=(grupo,id)=>{ document.getElementById(id).innerHTML=(CFG.rubros||[]).map(r=>
     `<button type="button" class="chip${RUB_CFG[grupo].has(r.codigo)?' active':''}" onclick="toggleRubroCfg('${grupo}','${encodeURIComponent(r.codigo)}')">${esc(r.nombre)}<small>${esc(r.codigo)}</small></button>`).join('')
     ||'<span class="hint">Primero importá los rubros.</span>'; };
-  chips('nunca','cfgRubrosNunca'); chips('fundas','cfgRubrosFundas');
+  chips('nunca','cfgRubrosNunca'); chips('fundas','cfgRubrosFundas'); chips('muertos','cfgRubrosMuertos');
+  // Subrubros: son muchos, se muestran los marcados y los que coinciden con la búsqueda.
+  const q=((document.getElementById('cfgBuscarSub')||{}).value||'').trim().toUpperCase();
+  const subs=CFG.subrubros||[];
+  const chipsSub=(grupo,id)=>{ const el=document.getElementById(id); if(!el) return;
+    const lista=subs.filter(x=>SUB_CFG[grupo].has(x.codigo)||(q&&(x.nombre.toUpperCase().includes(q)||x.codigo.toUpperCase()===q))).slice(0,60);
+    el.innerHTML=lista.map(x=>`<button type="button" class="chip${SUB_CFG[grupo].has(x.codigo)?' active':''}" onclick="toggleSubCfg('${grupo}','${encodeURIComponent(x.codigo)}')">${esc(x.nombre)}<small>${esc(x.codigo)}</small></button>`).join('')
+      ||`<span class="hint">${subs.length?'Ninguno marcado. Buscá arriba para agregar.':'Primero importá los subrubros.'}</span>`; };
+  chipsSub('nunca','cfgSubNunca'); chipsSub('muertos','cfgSubMuertos');
 }
-function toggleRubroCfg(grupo,cod){ cod=decodeURIComponent(cod); const s=RUB_CFG[grupo]; s.has(cod)?s.delete(cod):s.add(cod); pintarRubrosCfg(); }
-function guardarRubrosCfg(){ api('guardarRubrosConfig',[...RUB_CFG.nunca],[...RUB_CFG.fundas]).then(()=>toast('Rubros guardados')).catch(errorUI); }
+// Un rubro va en un solo grupo: al marcarlo en uno se saca de los otros.
+function toggleRubroCfg(grupo,cod){ cod=decodeURIComponent(cod); const s=RUB_CFG[grupo];
+  if(s.has(cod)) s.delete(cod); else { Object.keys(RUB_CFG).forEach(g=>RUB_CFG[g].delete(cod)); s.add(cod); }
+  pintarRubrosCfg(); }
+function toggleSubCfg(grupo,cod){ cod=decodeURIComponent(cod); const s=SUB_CFG[grupo];
+  if(s.has(cod)) s.delete(cod); else { Object.keys(SUB_CFG).forEach(g=>SUB_CFG[g].delete(cod)); s.add(cod); }
+  pintarRubrosCfg(); }
+function guardarRubrosCfg(){ api('guardarRubrosConfig',[...RUB_CFG.nunca],[...RUB_CFG.fundas],[...RUB_CFG.muertos],[...SUB_CFG.nunca],[...SUB_CFG.muertos]).then(()=>toast('Rubros guardados')).catch(errorUI); }
 
 let SUCS_CFG=[];
 function renderSucursalesCfg(){
