@@ -170,7 +170,7 @@ function cargarConfig(){
     renderTable('cfgTablaBases',['Base','Registros','Actualizada'],c.bases.map(b=>[b.nombre,num(b.registros),b.fecha||'']));
     renderSucursalesCfg();
     renderUsuariosCfg();
-    RUB_CFG={nunca:new Set(c.rubrosNunca||[]),fundas:new Set(c.rubrosFundas||[]),muertos:new Set(c.rubrosMuertos||[])};
+    RUB_CFG={noGeneral:new Set(c.rubrosNoGeneral||[]),noFundas:new Set(c.rubrosNoFundas||[]),muertos:new Set(c.rubrosMuertos||[])};
     SUB_CFG={nunca:new Set(c.subrubrosNunca||[]),muertos:new Set(c.subrubrosMuertos||[])};
     pintarRubrosCfg();
     const prods=lsGet('cellcom_productos2');
@@ -209,12 +209,14 @@ async function importarBaseUI(){
   }catch(e){ st.textContent=e.message; }
 }
 
-let RUB_CFG={nunca:new Set(),fundas:new Set(),muertos:new Set()}, SUB_CFG={nunca:new Set(),muertos:new Set()};
+let RUB_CFG={noGeneral:new Set(),noFundas:new Set(),muertos:new Set()}, SUB_CFG={nunca:new Set(),muertos:new Set()};
+// Negro = NO se cuenta. Un rubro puede estar en varias listas a la vez.
 function pintarRubrosCfg(){
-  const chips=(grupo,id)=>{ document.getElementById(id).innerHTML=(CFG.rubros||[]).map(r=>
+  const qr=normTxt((document.getElementById('cfgBuscarRub')||{}).value||'');
+  const chips=(grupo,id)=>{ const el=document.getElementById(id); if(!el) return; el.innerHTML=(CFG.rubros||[]).filter(r=>!qr||normTxt(r.nombre+' '+r.codigo).includes(qr)).map(r=>
     `<button type="button" class="chip${RUB_CFG[grupo].has(r.codigo)?' active':''}" onclick="toggleRubroCfg('${grupo}','${encodeURIComponent(r.codigo)}')">${esc(r.nombre)}<small>${esc(r.codigo)}</small></button>`).join('')
-    ||'<span class="hint">Primero importá los rubros.</span>'; };
-  chips('nunca','cfgRubrosNunca'); chips('fundas','cfgRubrosFundas'); chips('muertos','cfgRubrosMuertos');
+    ||`<span class="hint">${(CFG.rubros||[]).length?'Ningún rubro con esa búsqueda.':'Primero importá los rubros.'}</span>`; };
+  chips('noGeneral','cfgRubNoGeneral'); chips('noFundas','cfgRubNoFundas'); chips('muertos','cfgRubMuertos');
   // Subrubros: son muchos, se muestran los marcados y los que coinciden con la búsqueda.
   const q=((document.getElementById('cfgBuscarSub')||{}).value||'').trim().toUpperCase();
   const subs=CFG.subrubros||[];
@@ -224,14 +226,17 @@ function pintarRubrosCfg(){
       ||`<span class="hint">${subs.length?'Ninguno marcado. Buscá arriba para agregar.':'Primero importá los subrubros.'}</span>`; };
   chipsSub('nunca','cfgSubNunca'); chipsSub('muertos','cfgSubMuertos');
 }
-// Un rubro va en un solo grupo: al marcarlo en uno se saca de los otros.
-function toggleRubroCfg(grupo,cod){ cod=decodeURIComponent(cod); const s=RUB_CFG[grupo];
-  if(s.has(cod)) s.delete(cod); else { Object.keys(RUB_CFG).forEach(g=>RUB_CFG[g].delete(cod)); s.add(cod); }
-  pintarRubrosCfg(); }
+function toggleRubroCfg(grupo,cod){ cod=decodeURIComponent(cod); const s=RUB_CFG[grupo]; s.has(cod)?s.delete(cod):s.add(cod); pintarRubrosCfg(); }
+// Marca o desmarca todos los rubros visibles (respeta la búsqueda).
+function rubCfgTodos(grupo,si){
+  const qr=normTxt((document.getElementById('cfgBuscarRub')||{}).value||'');
+  (CFG.rubros||[]).filter(r=>!qr||normTxt(r.nombre+' '+r.codigo).includes(qr)).forEach(r=>si?RUB_CFG[grupo].add(r.codigo):RUB_CFG[grupo].delete(r.codigo));
+  pintarRubrosCfg();
+}
 function toggleSubCfg(grupo,cod){ cod=decodeURIComponent(cod); const s=SUB_CFG[grupo];
   if(s.has(cod)) s.delete(cod); else { Object.keys(SUB_CFG).forEach(g=>SUB_CFG[g].delete(cod)); s.add(cod); }
   pintarRubrosCfg(); }
-function guardarRubrosCfg(){ api('guardarRubrosConfig',[...RUB_CFG.nunca],[...RUB_CFG.fundas],[...RUB_CFG.muertos],[...SUB_CFG.nunca],[...SUB_CFG.muertos]).then(()=>toast('Rubros guardados')).catch(errorUI); }
+function guardarRubrosCfg(){ api('guardarRubrosConfig',[...RUB_CFG.noGeneral],[...RUB_CFG.noFundas],[...RUB_CFG.muertos],[...SUB_CFG.nunca],[...SUB_CFG.muertos]).then(()=>toast('Rubros guardados')).catch(errorUI); }
 
 let SUCS_CFG=[];
 function renderSucursalesCfg(){

@@ -79,16 +79,16 @@ function stAbrir(){
     sel.innerHTML=(d.sucursales.length>1?'<option value="">Seleccionar sucursal</option>':'')+d.sucursales.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
     lsSet('st_sucursales',d.sucursales);
     const sec=document.getElementById('stSectores'); if(!sec.value) sec.value=d.sectoresDefault;
-    ST.rubros=d.rubros; ST.rubrosNunca=d.rubrosNunca||[]; ST.rubrosFundas=d.rubrosFundas||[]; ST.rubrosMuertos=d.rubrosMuertos||[];
-    lsSet('st_rubros',{rubros:d.rubros,nunca:ST.rubrosNunca,fundas:ST.rubrosFundas,muertos:ST.rubrosMuertos});
-    stRubrosPorDefecto();
+    ST.rubros=d.rubros; ST.rubrosNoGeneral=d.rubrosNoGeneral||[]; ST.rubrosNoFundas=d.rubrosNoFundas||[]; ST.rubrosMuertos=d.rubrosMuertos||[];
+    lsSet('st_rubros',{rubros:d.rubros,noGeneral:ST.rubrosNoGeneral,noFundas:ST.rubrosNoFundas,muertos:ST.rubrosMuertos});
+    stPintarRubrosDD();
   }).catch(e=>{
     // Sin conexión: se usa lo último guardado.
     const sucs=lsGet('st_sucursales')||(YO.sucursal?[YO.sucursal]:[]);
     document.getElementById('stSucursal').innerHTML=sucs.map(s=>`<option value="${esc(s)}">${esc(s)}</option>`).join('');
     const sec=document.getElementById('stSectores'); if(!sec.value) sec.value='A,B,C,D,E';
-    const rg=lsGet('st_rubros')||{}; ST.rubros=Array.isArray(rg)?rg:(rg.rubros||[]); ST.rubrosNunca=rg.nunca||[]; ST.rubrosFundas=rg.fundas||[]; ST.rubrosMuertos=rg.muertos||[];
-    stRubrosPorDefecto();
+    const rg=lsGet('st_rubros')||{}; ST.rubros=Array.isArray(rg)?rg:(rg.rubros||[]); ST.rubrosNoGeneral=rg.noGeneral||[]; ST.rubrosNoFundas=rg.noFundas||[]; ST.rubrosMuertos=rg.muertos||[];
+    stPintarRubrosDD();
     if(!esSinConexion(e)) errorUI(e);
   });
   stListar(); stPintarLocales(); cajaIniciar();
@@ -100,7 +100,7 @@ function stListar(){
     ST.lista=rows;
     document.getElementById('stExportarBox').style.display=rows.length?'flex':'none';
     renderTable('stTablaStocks',['','Fecha','Sucursal','Vuelta','Tipo','Estado','Art. sistema','Unid. contadas',''],
-      rows.map(s=>[html(`<input type="checkbox" class="stSel" value="${esc(s.id)}">`),s.fecha,s.sucursal,s.vuelta,s.tipo,html(`<span class="tag ${esc(s.estado)}">${esc(s.estado)}</span>`),num(s.articulosSistema),num(s.unidadesContadas),
+      rows.map(s=>[html(`<input type="checkbox" class="stSel" value="${esc(s.id)}">`),s.fecha,s.sucursal,s.vuelta,s.tipo+(s.parcial?' · parcial':''),html(`<span class="tag ${esc(s.estado)}">${esc(s.estado)}</span>`),num(s.articulosSistema),num(s.unidadesContadas),
         html((s.estado==='CONTANDO'?`<button class="btn-mini" onclick="stAbrirConteo('${esc(s.id)}')">Pistolear</button> `:'')+`<button class="btn-mini" onclick="stVerResultado('${esc(s.id)}')">${s.estado==='CERRADO'?'Ver':'Resultado'}</button>`)]),
       'Todavía no hay stocks.');
   }).catch(e=>{
@@ -114,28 +114,27 @@ function stListar(){
       html(`<button class="btn-mini" onclick="stAbrirConteo('${esc(s.id)}')">Pistolear</button>`)]),'No hay stocks guardados en este equipo. Usá "Crear sin conexión".');
   });
 }
-function stPintarRubros(){
-  const box=document.getElementById('stRubros');
-  const q=normTxt(document.getElementById('stBuscarRubro').value);
-  box.innerHTML=ST.rubros.filter(r=>!q||normTxt(r.nombre+' '+r.codigo).includes(q)||ST.rubrosSel.has(r.codigo))
-    .map(r=>`<button type="button" class="chip${ST.rubrosSel.has(r.codigo)?' active':''}" onclick="stToggleRubro('${encodeURIComponent(r.codigo)}')">${esc(r.nombre)}<small>${esc(r.codigo)}</small></button>`).join('')
-    || '<span class="hint">Primero importá los rubros en Configuración.</span>';
+// Desplegable "Rubros a contar": vacío = todos según Configuración; con rubros = stock parcial.
+function stPintarRubrosDD(){
+  const box=document.getElementById('stRubrosLista'); if(!box) return;
+  const q=normTxt((document.getElementById('stBuscarRubro')||{}).value||'');
+  box.innerHTML=(ST.rubros||[]).filter(r=>!q||normTxt(r.nombre+' '+r.codigo).includes(q)||ST.rubrosSel.has(r.codigo))
+    .map(r=>`<label><input type="checkbox" ${ST.rubrosSel.has(r.codigo)?'checked':''} onchange="stToggleRubro('${encodeURIComponent(r.codigo)}')">${esc(r.nombre)} <small>${esc(r.codigo)}</small></label>`).join('')
+    ||'<div class="hint">Primero importá los rubros en Configuración.</div>';
+  const sel=(ST.rubros||[]).filter(r=>ST.rubrosSel.has(r.codigo));
+  document.getElementById('stRubrosResumen').textContent=sel.length?`Stock parcial: ${sel.length<=3?sel.map(r=>r.nombre).join(', '):sel.length+' rubros'}`:'Todos (según Configuración)';
 }
-function stToggleRubro(c){ c=decodeURIComponent(c); ST.rubrosSel.has(c)?ST.rubrosSel.delete(c):ST.rubrosSel.add(c); stPintarRubros(); }
-// ST.rubrosSel = rubros que SE CUENTAN (chip negro).
-function stRubrosPorDefecto(){
-  const tipo=document.getElementById('stTipo').value;
-  const nunca=new Set(ST.rubrosNunca||[]), fundas=new Set(ST.rubrosFundas||[]), muertos=new Set(ST.rubrosMuertos||[]);
-  ST.rubrosSel=new Set((ST.rubros||[]).map(r=>r.codigo).filter(c=>tipo==='FUNDAS'?fundas.has(c):!nunca.has(c)&&!fundas.has(c)&&!muertos.has(c)));
-  stPintarRubros();
-}
-function stRubrosTodos(si){ ST.rubrosSel=new Set(si?(ST.rubros||[]).map(r=>r.codigo):[]); stPintarRubros(); }
+function stToggleRubro(c){ c=decodeURIComponent(c); ST.rubrosSel.has(c)?ST.rubrosSel.delete(c):ST.rubrosSel.add(c); stPintarRubrosDD(); }
+function stRubrosLimpiar(){ ST.rubrosSel=new Set(); document.getElementById('stBuscarRubro').value=''; stPintarRubrosDD(); }
+
+// Rubros que no se cuentan en un tipo de stock (de Configuración, guardado en el equipo).
+function stRubrosFuera(tipo){ return [...new Set([...(tipo==='FUNDAS'?ST.rubrosNoFundas:ST.rubrosNoGeneral)||[],...(ST.rubrosMuertos||[])])]; }
 
 function stDatosFormulario(){
   return { sucursal:document.getElementById('stSucursal').value, vuelta:document.getElementById('stVuelta').value.trim().toUpperCase(),
     fecha:document.getElementById('stFecha').value, tipo:document.getElementById('stTipo').value,
     sectores:document.getElementById('stSectores').value.split(',').map(s=>s.trim().toUpperCase()).filter(Boolean),
-    rubros:[...ST.rubrosSel], rubrosExcluidos:(ST.rubros||[]).map(r=>r.codigo).filter(c=>!ST.rubrosSel.has(c)) };
+    rubros:[...ST.rubrosSel], rubrosExcluidos:ST.rubrosSel.size?[]:stRubrosFuera(document.getElementById('stTipo').value) };
 }
 async function stLeerStockSucursal(){
   const file=document.getElementById('stArchivoStock').files[0];
@@ -157,7 +156,7 @@ async function stCrear(){
     const r=await api('crearStock',datos,filas);
     st.textContent=`Stock creado: ${r.articulos} artículos con stock en sistema.`;
     document.getElementById('stArchivoStock').value=''; document.getElementById('stVuelta').value='';
-    stRubrosPorDefecto();
+    stRubrosLimpiar(); document.getElementById('stRubrosDD').open=false;
     await stListarPromesa();
     stAbrirConteo(r.id);
   }catch(e){ st.textContent=esSinConexion(e)?'Sin conexión. Usá "Crear sin conexión".':e.message; }
@@ -384,14 +383,12 @@ function stModo(m){
   if(ST.modo==='lista'){ stDetenerCamara(); stPintarLista(); document.getElementById('stListaBuscar').focus(); }
   else document.getElementById('stScan').focus();
 }
-// Misma regla que el servidor: incluido → sí; excluido → no; sin definir → GENERAL sí, FUNDAS no.
+// Misma regla que el servidor: se cuenta todo menos los rubros excluidos (de Configuración).
 function stEntraRubro(rc){
-  if(!rc) return true;
   const inc=(ST.stock&&ST.stock.rubros)||[], exc=(ST.stock&&ST.stock.rubrosExcluidos)||[];
-  if(ST.stock&&ST.stock.tipo==='FUNDAS'&&!inc.length) return true;
-  if(inc.indexOf(rc)>=0) return true;
-  if(exc.indexOf(rc)>=0) return false;
-  return !(ST.stock&&ST.stock.tipo==='FUNDAS');
+  if(inc.length) return !!rc&&inc.indexOf(rc)>=0;   // stock parcial: solo esos rubros
+  if(!rc) return true;
+  return exc.indexOf(rc)<0;
 }
 function stPintarLista(){
   const box=document.getElementById('stListaItems'), info=document.getElementById('stListaInfo');
@@ -608,7 +605,7 @@ function stBorrarLocal(id,sinPreguntar){
 
 // ---------- resultado ----------
 function stVerResultado(id){
-  if(!ST.res||ST.res.stock.id!==id) ST.filtroRev={q:'',rubro:'',sub:''};
+  if(!ST.res||ST.res.stock.id!==id){ ST.filtroRev={q:'',rubro:'',sub:''}; ST.fxPend={}; ST.fxAbiertos=new Set(); }
   stMostrar('stResultado');
   document.getElementById('stResTitulo').textContent='Calculando...';
   const correr=()=>api('getResultadoStock',id).then(stPintarResultado).catch(e=>{ errorUI(e); if(esSinConexion(e)) stVolver(); });
@@ -630,7 +627,6 @@ function stPintarResultado(r){
   document.getElementById('stZonaAbierto').style.display=abierto?'block':'none';
   document.getElementById('stZonaCierre').style.display=abierto&&s.estado==='REVISION'&&YO.rol==='admin'?'block':'none';
   document.getElementById('stZonaReparto').style.display=r.cerrado?'block':'none';
-  document.getElementById('stZonaRubros').style.display=abierto?'block':'none';
 
   if(abierto){
     const z=r.resumen;
@@ -638,10 +634,8 @@ function stPintarResultado(r){
       ['Faltante bruto',money(z.faltanteBrutoARS)],['Faltante real',money(z.faltanteRealARS)],['Faltante real USD',usd(z.faltanteRealUSD)],['Sobrante real',money(z.sobranteRealARS)],['Sin precio',z.sinPrecio]]);
     const fuera=(r.rubrosPresentes||[]).filter(x=>!x.incluido);
     const dentro=(r.rubrosPresentes||[]).filter(x=>x.incluido&&x.codigo);
-    document.getElementById('stResRubros').innerHTML=`Se cuentan ${dentro.length} rubros`+(fuera.length?(fuera.length<=6?` · Fuera: ${esc(fuera.map(x=>x.nombre).join(', '))}`:` · ${fuera.length} rubros fuera (ver abajo)`):'')+(r.automatico?' (fundas sin rubros elegidos: entran los rubros pistoleados)':'');
-    ST.rubrosRes=new Set((r.rubrosPresentes||[]).filter(x=>x.incluido&&x.codigo).map(x=>x.codigo));
+    document.getElementById('stResRubros').innerHTML=s.parcial?`<b>Stock parcial:</b> se cuentan solo ${esc(dentro.map(x=>x.nombre).join(', '))}`:`Se cuentan ${dentro.length} rubros`+(fuera.length?(fuera.length<=8?` · No se cuentan: ${esc(fuera.map(x=>x.nombre).join(', '))}`:` · ${fuera.length} rubros no se cuentan`):'')+' · Se cambia con el filtro de abajo o en Configuración → Rubros.';
     ST.rubrosPresentes=r.rubrosPresentes||[];
-    stPintarRubrosRes();
     const acc=[];
     if(s.estado==='CONTANDO') acc.push(`<button class="btn btn-primary" onclick="stEstado('REVISION')">Terminar conteo → revisión</button>`);
     if(s.estado==='REVISION') acc.push(`<button class="btn btn-secondary" onclick="stEstado('CONTANDO')">Volver a contar</button>`);
@@ -649,6 +643,7 @@ function stPintarResultado(r){
     document.getElementById('stResAcciones').innerHTML=acc.join('');
 
     ST.resFaltantes=r.faltantes; ST.resSobrantes=r.sobrantes;
+    stPintarFiltroExcel();
     stFiltrarRev();
     ST.man={Falt:r.faltantesDisponibles||[],Sobr:r.sobrantesDisponibles||[]};
     stPintarMan('Falt',true); stPintarMan('Sobr',true);
@@ -692,22 +687,10 @@ function stFiltrarRev(){
   sr.innerHTML='<option value="">Todos los rubros</option>'+rubros.map(x=>`<option${x===F.rubro?' selected':''}>${esc(x)}</option>`).join('');
   ss.innerHTML='<option value="">Todos los subrubros</option>'+subs.map(x=>`<option${x===F.sub?' selected':''}>${esc(x)}</option>`).join('');
   const t=F.q.trim().toUpperCase();
-  const pasa=f=>(!F.rubro||f.rubro===F.rubro)&&(!F.sub||f.subrubro===F.sub)&&(!t||String(f.codigo).toUpperCase().includes(t)||String(f.nombre).toUpperCase().includes(t));
+  const pasa=f=>stCuentaFila(f)&&(!F.rubro||f.rubro===F.rubro)&&(!F.sub||f.subrubro===F.sub)&&(!t||String(f.codigo).toUpperCase().includes(t)||String(f.nombre).toUpperCase().includes(t));
   const fa=(ST.resFaltantes||[]).filter(pasa), so=(ST.resSobrantes||[]).filter(pasa);
   const tot=l=>l.reduce((s,f)=>s+Math.abs(f.diferencia)*f.precioARS,0);
   const filtrando=F.q||F.rubro||F.sub;
-  // Con un rubro o subrubro elegido, el admin lo puede sacar del conteo desde acá.
-  const bm=document.getElementById('stFiltAcciones');
-  let g=null;
-  if(F.sub){ const f=todos.find(x=>x.subrubro===F.sub&&x.subrubroCod); if(f) g={nivel:'SUBRUBRO',codigo:f.subrubroCod,nombre:F.sub}; }
-  else if(F.rubro){ const rp=(ST.rubrosPresentes||[]).find(x=>x.nombre===F.rubro&&x.codigo); const f=todos.find(x=>x.rubro===F.rubro&&x.rubroCod);
-    const c=rp?rp.codigo:(f?f.rubroCod:''); if(c) g={nivel:'RUBRO',codigo:c,nombre:F.rubro}; }
-  const puede=g&&YO.rol==='admin';
-  bm.style.display=puede?'flex':'none';
-  bm.innerHTML=puede?(()=>{ const a=`'${g.nivel}','${encodeURIComponent(g.codigo)}','${encodeURIComponent(g.nombre)}'`, que=(g.nivel==='RUBRO'?'rubro ':'subrubro ')+esc(g.nombre);
-    return `<button type="button" class="btn btn-secondary" onclick="stMarcarGrupo(${a},'NUNCA')">No contar ${que}</button>
-      <button type="button" class="btn btn-danger" onclick="stMarcarGrupo(${a},'MUERTO')">Mandar ${que} a stock muerto</button>
-      <span class="hint">Deja de contarse en este stock y en los próximos.</span>`; })():'';
   document.getElementById('stFiltInfo').innerHTML=filtrando?`Mostrando ${fa.length} de ${(ST.resFaltantes||[]).length} faltantes (${money(tot(fa))} final) y ${so.length} de ${(ST.resSobrantes||[]).length} sobrantes (${money(tot(so))} final)`:'';
   const cab=x=>['Código','Artículo','Rubro','Subrubro','Sistema','Contado',x,'Precio','Total',x==='Falta'?'Apareció / nota':'De más / nota',x+' final'];
   renderTable('stTablaFaltantes',cab('Falta'),fa.map(f=>stFilaRev(f,'F')),filtrando?'Nada con ese filtro.':'No hay faltantes.');
@@ -716,15 +699,20 @@ function stFiltrarRev(){
 function stMarcarGrupo(nivel,cod,nombre,destino){
   cod=decodeURIComponent(cod); nombre=decodeURIComponent(nombre);
   const que=(nivel==='RUBRO'?'el rubro ':'el subrubro ')+nombre;
-  const msg={NUNCA:`¿No contar ${que}? Pasa a "No se cuenta" (en este stock y en los próximos).`,
+  const tipoTxt=ST.res.stock.tipo==='FUNDAS'?'fundas':'general';
+  const msg={NO_TIPO:`¿No contar ${que} en los stocks de ${tipoTxt}?`,
+    NUNCA:`¿No contar ${que}${nivel==='RUBRO'?' ni en general ni en fundas':''}? Pasa a "No se cuenta".`,
     MUERTO:`¿Mandar ${que} a stock muerto? No se cuenta ni se descuenta (en este stock y en los próximos).`,
-    CONTAR:`¿Volver a contar ${que}?`}[destino];
+    CONTAR:`¿Volver a contar ${que}${nivel==='RUBRO'?' en los stocks de '+tipoTxt:''}?`}[destino];
   if(!confirm(msg)) return;
   api('marcarGrupo',ST.res.stock.id,nivel,cod,destino).then(r=>{
-    if(nivel==='RUBRO'){ const m=new Set(ST.rubrosMuertos||[]), n=new Set(ST.rubrosNunca||[]); m.delete(cod); n.delete(cod);
-      if(destino==='MUERTO') m.add(cod); if(destino==='NUNCA') n.add(cod); ST.rubrosMuertos=[...m]; ST.rubrosNunca=[...n]; }
+    if(nivel==='RUBRO'){
+      const m=new Set(ST.rubrosMuertos||[]), g=new Set(ST.rubrosNoGeneral||[]), f=new Set(ST.rubrosNoFundas||[]), t=ST.res.stock.tipo==='FUNDAS'?f:g;
+      if(destino==='MUERTO') m.add(cod); if(destino==='NO_TIPO') t.add(cod); if(destino==='NUNCA'){ g.add(cod); f.add(cod); }
+      if(destino==='CONTAR'){ m.delete(cod); t.delete(cod); }
+      ST.rubrosMuertos=[...m]; ST.rubrosNoGeneral=[...g]; ST.rubrosNoFundas=[...f]; }
     if(destino!=='CONTAR') ST.filtroRev={q:'',rubro:'',sub:''};
-    toast({NUNCA:nombre+' no se cuenta',MUERTO:nombre+' pasó a stock muerto',CONTAR:nombre+' vuelve a contarse'}[destino]); stPintarResultado(r);
+    toast({NO_TIPO:nombre+' no se cuenta en '+(ST.res.stock.tipo==='FUNDAS'?'fundas':'general'),NUNCA:nombre+' no se cuenta',MUERTO:nombre+' pasó a stock muerto',CONTAR:nombre+' vuelve a contarse'}[destino]); stPintarResultado(r);
   }).catch(errorUI);
 }
 function stPintarFuera(zona,info,tabla,m,r){
@@ -737,19 +725,56 @@ function stPintarFuera(zona,info,tabla,m,r){
   renderTable(tabla,['Código','Artículo','Rubro','Subrubro','Por','Stock sistema','Precio','Total $','Total USD'],
     m.items.map(i=>[i.codigo,i.nombre,i.rubro,i.subrubro||'',i.grupo,num(i.stock),i.precioARS?money(i.precioARS):html('<span class="warn">Sin precio</span>'),money(i.totalARS),usd(i.totalUSD)]),'');
 }
+// ---------- Filtro tipo Excel (qué se cuenta) ----------
+// ST.fxPend: cambios sin aplicar, clave 'RUBRO|cod' o 'SUBRUBRO|cod' → 'CUENTA' | 'NO' | 'MUERTO'.
+function stFxBase(){ const m={}; (ST.res&&ST.res.filtro||[]).forEach(r=>{ m['RUBRO|'+r.codigo]=r.estado; (r.subs||[]).forEach(x=>{ if(x.codigo) m['SUBRUBRO|'+x.codigo]=x.estado; }); }); return m; }
+function stFxEstado(nivel,cod,base){ const k=nivel+'|'+cod; return (ST.fxPend&&ST.fxPend[k])||base[k]||'CUENTA'; }
+function stCuentaFila(f){
+  if(!ST.fxPend||!Object.keys(ST.fxPend).length) return true;
+  const base=ST.fxBase||stFxBase();
+  if(f.rubroCod&&stFxEstado('RUBRO',f.rubroCod,base)!=='CUENTA') return false;
+  if(f.subrubroCod&&stFxEstado('SUBRUBRO',f.subrubroCod,base)!=='CUENTA') return false;
+  return true;
+}
+function stPintarFiltroExcel(){
+  ST.fxPend=ST.fxPend||{}; ST.fxAbiertos=ST.fxAbiertos||new Set();
+  const base=ST.fxBase=stFxBase(), admin=YO.rol==='admin', lista=(ST.res&&ST.res.filtro)||[];
+  const fila=(nivel,x,rubroOff)=>{
+    const k=nivel+'|'+x.codigo, est=stFxEstado(nivel,x.codigo,base), pend=ST.fxPend[k]&&ST.fxPend[k]!==base[k];
+    const c=encodeURIComponent(x.codigo), puede=admin&&x.codigo&&!rubroOff;
+    const datos=x.conDiferencia?`${num(x.conDiferencia)} con diferencia${x.faltanteARS?' · falta '+money(x.faltanteARS):''}${x.sobranteARS?' · sobra '+money(x.sobranteARS):''}`:'sin diferencias';
+    const tog=nivel==='RUBRO'&&(x.subs||[]).length>1?`<button type="button" class="fx-tog" onclick="stFxAbrir('${c}')">${ST.fxAbiertos.has(x.codigo)?'▾':'▸'}</button>`:(nivel==='RUBRO'?'<span class="fx-tog"></span>':'');
+    return `<div class="fx-row${nivel==='SUBRUBRO'?' sub':''}${x.conDiferencia?'':' cero'}${pend?' pend':''}">${tog}
+      <label><input type="checkbox" ${est==='CUENTA'?'checked':''} ${puede?'':'disabled'} onchange="stFxSet('${nivel}','${c}',this.checked?'CUENTA':'NO')">${esc(x.nombre)}${est==='MUERTO'?' <span class="tag MUERTO">stock muerto</span>':''}</label>
+      <small>${datos}</small>
+      ${puede&&est!=='MUERTO'?`<button type="button" class="btn-mini" onclick="stFxSet('${nivel}','${c}','MUERTO')">Stock muerto</button>`:''}</div>`;
+  };
+  document.getElementById('stFiltroLista').innerHTML=lista.map(r=>{
+    const off=stFxEstado('RUBRO',r.codigo,base)!=='CUENTA';
+    return fila('RUBRO',r)+(ST.fxAbiertos.has(r.codigo)?(r.subs||[]).map(x=>fila('SUBRUBRO',x,off||!x.codigo)).join(''):'');
+  }).join('')||'<div class="hint" style="padding:10px">No hay artículos en este stock.</div>';
+  const n=Object.keys(ST.fxPend).filter(k=>ST.fxPend[k]!==base[k]).length;
+  const bar=document.getElementById('stFiltroBar');
+  bar.style.display=n?'flex':'none';
+  bar.innerHTML=n?`<b>${n} cambio${n>1?'s':''} sin aplicar</b> <span class="hint" style="margin:0">Ya se ocultaron de la lista; al aplicar se recalcula el faltante y se guarda.</span>
+    <button type="button" class="btn btn-primary" onclick="stFxAplicar(this)">Aplicar</button><button type="button" class="btn btn-secondary" onclick="stFxDescartar()">Descartar</button>`:'';
+}
+function stFxAbrir(c){ c=decodeURIComponent(c); ST.fxAbiertos.has(c)?ST.fxAbiertos.delete(c):ST.fxAbiertos.add(c); stPintarFiltroExcel(); }
+function stFxSet(nivel,c,estado){
+  c=decodeURIComponent(c); const k=nivel+'|'+c;
+  if((ST.fxBase||{})[k]===estado||(!(ST.fxBase||{})[k]&&estado==='CUENTA')) delete ST.fxPend[k]; else ST.fxPend[k]=estado;
+  stPintarFiltroExcel(); stFiltrarRev();
+}
+function stFxDescartar(){ ST.fxPend={}; stPintarFiltroExcel(); stFiltrarRev(); }
+function stFxAplicar(btn){
+  const cambios=Object.keys(ST.fxPend).map(k=>{ const i=k.indexOf('|'); return {nivel:k.slice(0,i),codigo:k.slice(i+1),estado:ST.fxPend[k]}; });
+  if(!cambios.length) return;
+  btn.disabled=true; btn.textContent='Aplicando...';
+  api('aplicarFiltroStock',ST.res.stock.id,cambios).then(r=>{ ST.fxPend={}; toast('Filtro aplicado y guardado'); stPintarResultado(r); })
+    .catch(e=>{ btn.disabled=false; btn.textContent='Aplicar'; errorUI(e); });
+}
 function stFiltroSet(k,v){ if(!ST.filtroRev) ST.filtroRev={q:'',rubro:'',sub:''}; ST.filtroRev[k]=v; if(k==='rubro') ST.filtroRev.sub=''; stFiltrarRev(); }
 function stLimpiarFiltroRev(){ ST.filtroRev={q:'',rubro:'',sub:''}; document.getElementById('stFiltQ').value=''; stFiltrarRev(); }
-function stPintarRubrosRes(){
-  document.getElementById('stResRubrosChips').innerHTML=(ST.rubrosPresentes||[]).filter(x=>x.codigo).map(x=>
-    `<button type="button" class="chip${ST.rubrosRes.has(x.codigo)?' active':''}" onclick="stToggleRubroRes('${encodeURIComponent(x.codigo)}')">${esc(x.nombre)}${x.muerto?' <small>(stock muerto)</small>':''}<small>${num(x.articulos)} art. · ${num(x.unidadesSistema)} u.</small></button>`).join('')
-    ||'<span class="hint">No hay rubros en este stock.</span>';
-}
-function stToggleRubroRes(c){ c=decodeURIComponent(c); ST.rubrosRes.has(c)?ST.rubrosRes.delete(c):ST.rubrosRes.add(c); stPintarRubrosRes(); }
-function stAplicarRubros(){
-  const todos=(ST.rubrosPresentes||[]).filter(x=>x.codigo).map(x=>x.codigo);
-  const inc=todos.filter(c=>ST.rubrosRes.has(c)), exc=todos.filter(c=>!ST.rubrosRes.has(c));
-  api('actualizarRubrosStock',ST.res.stock.id,inc,exc).then(r=>{ toast('Rubros actualizados'); stPintarResultado(r); }).catch(errorUI);
-}
 function stGuardarRev(btn,tipo){
   const ins=btn.closest('tr').querySelectorAll('input');
   const n=Math.max(0,Number(ins[0].value)||0);

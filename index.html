@@ -61,19 +61,19 @@
             <div><label>Sucursal</label><select id="stSucursal"></select></div>
             <div><label>Vuelta</label><input id="stVuelta" placeholder="Ej: 4TA" autocapitalize="characters"></div>
             <div><label>Fecha del stock</label><input id="stFecha" type="date"></div>
-            <div><label>Tipo</label><select id="stTipo" onchange="stRubrosPorDefecto()"><option value="GENERAL">General</option><option value="FUNDAS">Fundas</option></select></div>
+            <div><label>Tipo</label><select id="stTipo"><option value="GENERAL">General</option><option value="FUNDAS">Fundas</option></select></div>
           </div>
           <label>Sectores (separados por coma)</label>
           <input id="stSectores">
-          <label>Rubros que se cuentan</label>
-          <div class="hint">Negro = se cuenta. Se proponen según Configuración (el nocturno sin fundas ni los rubros que nunca se cuentan; fundas solo fundas). Se puede cambiar también antes de cerrar.</div>
-          <div class="actions" style="margin-top:4px">
-            <input id="stBuscarRubro" type="search" placeholder="Buscar rubro..." oninput="stPintarRubros()" style="flex:1;min-width:160px">
-            <button type="button" class="btn-mini" onclick="stRubrosTodos(true)">Todos</button>
-            <button type="button" class="btn-mini" onclick="stRubrosTodos(false)">Ninguno</button>
-            <button type="button" class="btn-mini" onclick="stRubrosPorDefecto()">Por defecto</button>
-          </div>
-          <div id="stRubros" class="chips" style="max-height:180px;overflow:auto"></div>
+          <label>Rubros a contar</label>
+          <details id="stRubrosDD" class="dd">
+            <summary id="stRubrosResumen">Todos (según Configuración)</summary>
+            <div class="dd-panel">
+              <div class="hint" style="margin-top:0">Dejalo en "Todos" para el stock normal. Elegí uno o más rubros solo para un stock parcial: se cuentan únicamente esos.</div>
+              <div class="row"><input id="stBuscarRubro" type="search" placeholder="Buscar rubro..." oninput="stPintarRubrosDD()"><button type="button" class="btn-mini" onclick="stRubrosLimpiar()">Todos (sin elegir)</button></div>
+              <div id="stRubrosLista" class="dd-lista"></div>
+            </div>
+          </details>
           <label>Stock de la sucursal (export de Zeppelin, stock mayor a 0)</label>
           <input type="file" id="stArchivoStock" accept=".xls,.xlsx,.csv,.dbf">
           <div class="actions">
@@ -180,15 +180,13 @@
           <div class="actions" id="stResAcciones"></div>
         </div>
 
-        <div class="panel" id="stZonaRubros" style="display:none;">
-          <h2>Rubros que se cuentan</h2>
-          <div class="hint">Negro = entra en el resultado. Apagá lo que no corresponde (fundas en el nocturno, promociones, reparaciones...) y tocá "Aplicar".</div>
-          <div id="stResRubrosChips" class="chips"></div>
-          <div class="actions"><button class="btn btn-primary" onclick="stAplicarRubros()">Aplicar</button></div>
-        </div>
-
         <div id="stZonaAbierto">
-          <div class="panel"><h2>Filtrar lista</h2><div class="hint">Solo cambia lo que ves para revisar; no cambia qué se cuenta (eso es "Rubros que se cuentan").</div>
+          <div class="panel" id="stZonaFiltro"><h2>Filtro: qué se cuenta</h2>
+            <div class="hint">Como el filtro de Excel: destildá los rubros o subrubros que no van (▸ abre los subrubros). Se guarda para los próximos stocks de este tipo y se puede cambiar en Configuración → Rubros.</div>
+            <div id="stFiltroBar" class="fx-bar" style="display:none;"></div>
+            <div id="stFiltroLista" class="fx-lista"></div>
+          </div>
+          <div class="panel"><h2>Filtrar lista</h2><div class="hint">Solo cambia lo que ves para revisar. Para sacar algo del conteo usá el filtro de arriba.</div>
             <div class="row">
               <input id="stFiltQ" placeholder="Buscar código o nombre" oninput="stFiltroSet('q',this.value)">
               <select id="stFiltRubro" onchange="stFiltroSet('rubro',this.value)"></select>
@@ -196,7 +194,6 @@
               <button type="button" class="btn btn-secondary" onclick="stLimpiarFiltroRev()">Limpiar</button>
             </div>
             <div id="stFiltInfo" class="hint"></div>
-            <div id="stFiltAcciones" class="actions" style="display:none;"></div>
           </div>
           <div class="panel"><h2>Faltantes</h2><div class="hint">Lo más caro arriba. Al buscarlos con los vendedores, cargá cuántos aparecieron y guardá.</div><div class="table-wrap"><table id="stTablaFaltantes" class="rev"></table></div></div>
           <div class="panel"><h2>Sobrantes</h2><div class="hint">Si algo se contó de más, cargá cuántos y guardá.</div><div class="table-wrap"><table id="stTablaSobrantes" class="rev"></table></div></div>
@@ -294,13 +291,16 @@
 
       <div class="panel">
         <h2>Rubros</h2>
-        <div class="hint">Sirve para proponer qué se cuenta en cada stock. Después se puede cambiar en cada uno.</div>
-        <label>Nunca se cuentan (promociones, reparaciones...)</label>
-        <div id="cfgRubrosNunca" class="chips" style="max-height:180px;overflow:auto"></div>
-        <label>Son de fundas (se cuentan en el stock de fundas, no en el nocturno)</label>
-        <div id="cfgRubrosFundas" class="chips" style="max-height:180px;overflow:auto"></div>
-        <label>Stock muerto (figura en sistema pero no está: no se cuenta ni se descuenta, sale en un listado aparte para decidir qué hacer)</label>
-        <div id="cfgRubrosMuertos" class="chips" style="max-height:180px;overflow:auto"></div>
+        <div class="hint"><b>Negro = NO se cuenta.</b> Lo que queda en blanco se cuenta. Un rubro puede estar marcado en las dos listas. Vale para todos los stocks abiertos.</div>
+        <input id="cfgBuscarRub" type="search" placeholder="Buscar rubro..." oninput="pintarRubrosCfg()">
+        <div class="head-row" style="margin-top:12px"><label style="margin:0">No se cuentan en el stock GENERAL (nocturno)</label>
+          <span><button type="button" class="btn-mini" onclick="rubCfgTodos('noGeneral',true)">Marcar todos</button> <button type="button" class="btn-mini" onclick="rubCfgTodos('noGeneral',false)">Ninguno</button></span></div>
+        <div id="cfgRubNoGeneral" class="chips" style="max-height:200px;overflow:auto"></div>
+        <div class="head-row" style="margin-top:12px"><label style="margin:0">No se cuentan en el stock de FUNDAS</label>
+          <span><button type="button" class="btn-mini" onclick="rubCfgTodos('noFundas',true)">Marcar todos</button> <button type="button" class="btn-mini" onclick="rubCfgTodos('noFundas',false)">Ninguno</button></span></div>
+        <div id="cfgRubNoFundas" class="chips" style="max-height:200px;overflow:auto"></div>
+        <div class="head-row" style="margin-top:12px"><label style="margin:0">Stock muerto (figura en sistema pero no está: no se cuenta en ninguno y sale en un listado aparte)</label></div>
+        <div id="cfgRubMuertos" class="chips" style="max-height:200px;overflow:auto"></div>
         <h3 style="margin-top:14px">Por subrubro</h3>
         <div class="hint">Para cuando el rubro se cuenta pero un subrubro no (ej. STICKERS cargado con rubro BAZAR). El subrubro manda sobre el rubro.</div>
         <input id="cfgBuscarSub" type="search" placeholder="Buscar subrubro..." oninput="pintarRubrosCfg()">

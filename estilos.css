@@ -121,3 +121,26 @@ body.sin-conexion .offline-bar{display:block}
 .item-lista .ctrl input{width:62px;height:44px;text-align:center;font-weight:800;padding:0 4px}
 .item-lista.dif-neg .cont{color:#b91c1c}.item-lista.dif-pos .cont{color:#a16207}.item-lista.dif-ok .cont{color:#15803d}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>input,.row>select{flex:1 1 160px}.row>button{flex:0 0 auto}
+
+.fx-lista{max-height:420px;overflow:auto;border:1px solid #e5e5e5;border-radius:12px}
+.fx-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap}
+.fx-row.sub{padding-left:40px;background:#fafafa}
+.fx-row.cero{color:#888}
+.fx-row.pend{background:#fef9c3}
+.fx-row label{display:flex;align-items:center;gap:8px;margin:0;font-weight:700;cursor:pointer;flex:1 1 220px;min-width:0}
+.fx-row label input{width:20px;height:20px;flex:0 0 auto}
+.fx-row small{color:#555;flex:1 1 220px}
+.fx-row .fx-tog{border:0;background:none;font-size:15px;cursor:pointer;width:22px;padding:0}
+.fx-row .tag.MUERTO{background:#fee2e2;color:#7f1d1d}
+.fx-bar{position:sticky;top:60px;z-index:4;display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:#fef3c7;border:1px solid #f59e0b;border-radius:12px;padding:10px;margin:8px 0}
+
+.dd{border:1px solid #ccc;border-radius:12px;background:#fff}
+.dd summary{list-style:none;cursor:pointer;padding:12px;font-size:15px;display:flex;justify-content:space-between;gap:8px}
+.dd summary::-webkit-details-marker{display:none}
+.dd summary::after{content:'▾';color:#666}
+.dd[open] summary{border-bottom:1px solid #eee}
+.dd-panel{padding:10px 12px}
+.dd-lista{max-height:260px;overflow:auto;margin-top:8px}
+.dd-lista label{display:flex;align-items:center;gap:10px;margin:0;padding:8px 4px;border-bottom:1px solid #f2f2f2;font-weight:600;cursor:pointer}
+.dd-lista label input{width:20px;height:20px;flex:0 0 auto}
+.dd-lista small{color:#777;font-weight:400}
