@@ -1,10 +1,10 @@
 // Service worker: guarda las pantallas en el equipo para que la app abra sin internet.
 // Al cambiar archivos, subí CACHE (y CELLCOM_VERSION en config.js) para que los equipos se actualicen.
-const CACHE = 'cellcom-v11';
+const CACHE = 'cellcom-v12';
 const ARCHIVOS = [
   './', './index.html', './estilos.css', './config.js', './manifest.webmanifest',
   './js/app.js', './js/stock.js', './lib/xlsx.full.min.js', './lib/html5-qrcode.min.js',
-  './icons/icon-192.png', './icons/icon-512.png', './img/logo-blanco.png', './img/logo-negro.png'
+  './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png', './img/logo-blanco.png', './img/logo-negro.png'
 ];
 
 self.addEventListener('install', e => {
